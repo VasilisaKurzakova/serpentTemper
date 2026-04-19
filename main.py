@@ -2,21 +2,26 @@ import asyncio
 import random
 import logging
 from os import getenv
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message
 from aiogram.filters import Command
 
 load_dotenv()
-TOKEN = getenv("8005942747:AAG7UznaolAscG9b5lg30MPQIQCeXoRKTgc")
 
-bot = Bot(token= 8005942747:AAG7UznaolAscG9b5lg30MPQIQCeXoRKTgc, parse_mode="HTML")
+# Имя переменной окружения, значение — сам токен задаётся в Render → Environment
+TOKEN = getenv("BOT_TOKEN")
+if not TOKEN:
+    raise RuntimeError("Set BOT_TOKEN in environment (Render → Environment)")
+
+bot = Bot(token=TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 
 # Хранилище данных (пока в памяти — для простоты)
 games = {}          # chat_id -> game_data
 player_numbers = {} # user_id -> (chat_id, number)
+
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
@@ -28,6 +33,7 @@ async def cmd_start(message: Message):
         "/join — присоединиться к игре\n"
         "/begin — начать сбор фактов (только ведущий)"
     )
+
 
 @dp.message(Command("newgame"))
 async def cmd_newgame(message: Message):
@@ -49,6 +55,7 @@ async def cmd_newgame(message: Message):
         "Когда все готовы — ведущий жмёт /begin"
     )
 
+
 @dp.message(Command("join"))
 async def cmd_join(message: Message):
     chat_id = message.chat.id
@@ -63,6 +70,7 @@ async def cmd_join(message: Message):
 
     game["players"].append(user_id)
     await message.answer(f"@{message.from_user.username or message.from_user.first_name} присоединился(ась) к игре! 🐍")
+
 
 @dp.message(Command("begin"))
 async def cmd_begin(message: Message):
@@ -90,7 +98,7 @@ async def cmd_begin(message: Message):
                 f"🐍 <b>Ты — Змея №{i}</b>\n\n"
                 "Скоро твоя очередь. Когда ведущий скажет «Змея №X, твоя очередь», напиши мне сюда один завуалированный факт о себе."
             )
-        except:
+        except Exception:
             await message.answer(f"Не смог написать пользователю с id {user_id} (возможно, бот не добавлен в ЛС)")
 
     game["phase"] = "facts"
@@ -100,6 +108,7 @@ async def cmd_begin(message: Message):
         "Теперь по очереди будем собирать факты.\n"
         f"Змея №1 — твоя очередь! Напиши мне в ЛС завуалированный факт."
     )
+
 
 # Обработка фактов в личных сообщениях
 @dp.message(F.chat.type == "private")
@@ -121,11 +130,12 @@ async def handle_private_fact(message: Message):
     fact = message.text.strip()
     if len(fact) < 10:
         await message.answer("Факт слишком короткий. Напиши подробнее 😉")
-        returngame["facts"][number] = fact
+        return
+    game["facts"][number] = fact
 
     await bot.send_message(
         chat_id,
-        f"🐍 <b>Змея №{number} шепнула:</b>\n\n{i} {fact}"
+        f"🐍 <b>Змея №{number} шепнула:</b>\n\n{fact}"
     )
 
     # Переходим к следующей змее
@@ -148,6 +158,7 @@ async def handle_private_fact(message: Message):
 
     await message.answer("Факт принят! ✅")
 
+
 # Для завершения игры (по желанию)
 @dp.message(Command("reveal"))
 async def cmd_reveal(message: Message):
@@ -162,7 +173,7 @@ async def cmd_reveal(message: Message):
             user = await bot.get_chat(user_id)
             name = user.username or user.first_name
             text += f"Змея №{num} — @{name}\n"
-        except:
+        except Exception:
             text += f"Змея №{num} — неизвестный пользователь\n"
 
     await message.answer(text)
@@ -171,9 +182,11 @@ async def cmd_reveal(message: Message):
         player_numbers.pop(uid, None)
     games.pop(chat_id, None)
 
+
 async def main():
     logging.basicConfig(level=logging.INFO)
     await dp.start_polling(bot)
 
-if name == "main":
+
+if __name__ == "__main__":
     asyncio.run(main())
